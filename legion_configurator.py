@@ -225,3 +225,82 @@ def create_gyro_enable_command(controller, enable):
     ]
     return bytes(command) + bytes([0xCD] * (64 - len(command)))
 
+def create_touchpad_vibration_command(enable):
+    """
+    Create a command to enable or disable touchpad vibration.
+
+    :param enable: bool - True to enable, False to disable touchpad vibration
+    :return: bytes - The command byte array
+    """
+    enable_byte = 0x02 if enable else 0x01
+    command = [
+        0x05, 0x06,  # Report ID and Length
+        0x6b, 0x04, 0x04,  # Command and sub-parameters
+        enable_byte, 0x01   # Enable/Disable flag and command end marker
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+def create_legion_button_swap_command(enable):
+    """
+    Create a command to swap legion buttons with start/select.
+
+    :param enable: bool - True to swap, False to revert
+    :return: bytes - The command byte array
+    """
+    enable_byte = 0x02 if enable else 0x01
+    command = [
+        0x05, 0x06,  # Report ID and Length
+        0x69, 0x04, 0x01,  # Command and sub-parameters
+        enable_byte, 0x01   # Enable/Disable flag and command end marker
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+def create_deadzone_command(controller, level):
+    """
+    Create a command to control the deadzones of the sticks.
+
+    :param controller: byte - The controller byte (0x03 for left, 0x04 for right)
+    :param level: byte - Deadzone level (0x00 to 0x63, default is 0x04)
+    :return: bytes - The command byte array
+    """
+    command = [
+        0x05, 0x06,  # Report ID and Length
+        0x3f, 0x06,  # Command and sub-parameter
+        controller, level, 0x01  # Controller, level and command end marker
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+def create_sensitivity_command(controller, tx, ty, bx, by):
+    """
+    Create a command to control the sensitivity of the sticks.
+
+    :param controller: byte - The controller byte (0x03 for left, 0x04 for right)
+    :param tx, ty, bx, by: byte - Sensitivity settings
+    :return: bytes - The command byte array
+    """
+    command = [
+        0x05, 0x09,  # Report ID and Length
+        0x3f, 0x02,  # Command and sub-parameter
+        controller, tx, ty, bx, by, 0x01  # Controller, sensitivity settings, and command end marker
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+# sleepLeft = create_sleep_time_command(0x03, 0x01)
+# sleepRight = create_sleep_time_command(0x04, 0x01)
+
+# send_command(sleepLeft)
+# send_command(sleepRight)    
+# print("Sleep time set to 1 minute.")
+
+# # Enable touchpad vibration
+# touchpad_vibration_command = create_touchpad_vibration_command(True)
+# send_command(touchpad_vibration_command)
+# # Swap legion buttons with start/select
+# legion_button_swap_command = create_legion_button_swap_command(True)
+# send_command(legion_button_swap_command)
+# # Set deadzone for left stick to 10%
+# left_stick_deadzone_command = create_deadzone_command(0x03, 0x64)
+# send_command(left_stick_deadzone_command)
+# # Adjust sensitivity for right stick (example values)
+# right_stick_sensitivity_command = create_sensitivity_command(0x04, 0x10, 0x15, 0x0A, 0x0F)
+# send_command(right_stick_sensitivity_command)
