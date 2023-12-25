@@ -4,6 +4,10 @@ import logging
 import sys
 import time
 
+"""
+This script provides a Python interface to the ACPI interface of the Lenovo Legion Go.
+"""
+
 # Set up basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
