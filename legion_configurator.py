@@ -27,7 +27,7 @@ def get_config():
     else:
         print(global_config)
 
-def send_command(command):
+def send_command(command, read_response=False):
     global global_config
     get_config()
     assert len(command) == 64 and global_config
@@ -35,6 +35,10 @@ def send_command(command):
         with hid.Device(path=global_config['path']) as device:
             device.write(command)
             print("Command sent successfully.")
+            if read_response:
+                response = device.read(64)  # Assuming response is 64 bytes
+                print("Response received:", response)
+                return response
     except IOError as e:
         print(f"Error opening HID device: {e}")
 
@@ -273,7 +277,9 @@ def create_deadzone_command(controller, level):
 def create_sensitivity_command(controller, tx, ty, bx, by):
     """
     Create a command to control the sensitivity of the sticks.
-
+    Two point calibration is used for the sensitivity settings.
+    This is esentiall the curve, where the "curve" is made up of two points.
+    t = top, b = bottom, x = x-axis, y = y-axis, tx > bx and ty > by
     :param controller: byte - The controller byte (0x03 for left, 0x04 for right)
     :param tx, ty, bx, by: byte - Sensitivity settings
     :return: bytes - The command byte array
@@ -285,22 +291,87 @@ def create_sensitivity_command(controller, tx, ty, bx, by):
     ]
     return bytes(command) + bytes([0xCD] * (64 - len(command)))
 
-# sleepLeft = create_sleep_time_command(0x03, 0x01)
-# sleepRight = create_sleep_time_command(0x04, 0x01)
+def create_deadzone_command(controller):
+    """
+    Create a command for querying or setting the deadzones.
 
+    :param controller: byte - The controller byte (0x03 for left, 0x04 for right)
+    :return: bytes - The command byte array
+    """
+    command = [
+        0x05, 0x05,  # Report ID and Length
+        0x3f, 0x07,  # Command and sub-parameter
+        controller, 0x01  # Controller and command end marker
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+"""
+Getter functions for the controller settings. (untested)
+"""
+def create_leds_command(controller):
+    """
+    Create a command for LEDs settings.
+
+    :param controller: byte - The controller byte (0x03 for left, 0x04 for right)
+    :return: bytes - The command byte array
+    """
+    command = [
+        0x05, 0x05,  # Report ID and Length
+        0x6a, 0x01,  # Command and sub-parameter
+        controller, 0x01  # Controller and command end marker
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+def create_vibration_sensitivity_command():
+    """
+    Create a command related to vibration/sensitivity settings.
+    
+    :return: bytes - The command byte array
+    """
+    command = [
+        0x05, 0x06,  # Report ID and Length
+        0x83, 0x01,  # Command and sub-parameter
+        0x01, 0x02, 0x01  # Additional settings
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+def create_vibration_sensitivity_command():
+    """
+    Create a command related to vibration/sensitivity settings.
+    
+    :return: bytes - The command byte array
+    """
+    command = [
+        0x05, 0x06,  # Report ID and Length
+        0x83, 0x01,  # Command and sub-parameter
+        0x01, 0x02, 0x01  # Additional settings
+    ]
+    return bytes(command) + bytes([0xCD] * (64 - len(command)))
+
+# Example usage:
+# leds_command = create_leds_command(0x04)  # Example for right controller
+# response = send_command(leds_command, read_response=True)
+
+# vibration_sensitivity_command = create_vibration_sensitivity_command()
+# response = send_command(vibration_sensitivity_command, read_response=True)
+
+
+# sleepLeft = create_sleep_time_command(0x03, 0x1e)
 # send_command(sleepLeft)
-# send_command(sleepRight)    
-# print("Sleep time set to 1 minute.")
+# sleepRight = create_sleep_time_command(0x04, 5)
+# send_command(sleepRight)
+# leftSens = create_sensitivity_command(0x03, 85, 85 ,5 , 30)
+# send_command(leftSens)
+# rightSens = create_sensitivity_command(0x04, 85, 85 ,5 , 30)
+# send_command(rightSens)
+# vib = create_vibration_command(0x03, 0x03)
+# send_command(vib)
+# vib2 = create_vibration_command(0x04, 0x03)
+# send_command(vib2)
 
-# # Enable touchpad vibration
-# touchpad_vibration_command = create_touchpad_vibration_command(True)
-# send_command(touchpad_vibration_command)
-# # Swap legion buttons with start/select
-# legion_button_swap_command = create_legion_button_swap_command(True)
-# send_command(legion_button_swap_command)
-# # Set deadzone for left stick to 10%
-# left_stick_deadzone_command = create_deadzone_command(0x03, 0x64)
-# send_command(left_stick_deadzone_command)
-# # Adjust sensitivity for right stick (example values)
-# right_stick_sensitivity_command = create_sensitivity_command(0x04, 0x10, 0x15, 0x0A, 0x0F)
-# send_command(right_stick_sensitivity_command)
+# touchVib = create_touchpad_vibration_command(False)
+# send_command(touchVib)
+
+# deadzone = create_deadzone_command(0x03, 0x05)
+# deadzone2 = create_deadzone_command(0x04, 0x05)
+# send_command(deadzone)
+# send_command(deadzone2) 
