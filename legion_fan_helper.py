@@ -17,7 +17,7 @@ Usage:
 
 Requirements:
 
-psutil - python3 -m pip install psutil
+sudo psutil - python3 -m pip install psutil
 """
 
 
