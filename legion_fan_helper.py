@@ -25,7 +25,7 @@ from logging.handlers import RotatingFileHandler
 import subprocess
 import re
 
-ryzen_monitoring = True
+ryzen_monitoring = False
 
 # Configure logging
 log_format = "%(asctime)s - %(levelname)s - %(message)s"
