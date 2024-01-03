@@ -15,6 +15,9 @@ Usage:
     Ensure all dependencies are installed, and the system supports required commands and ACPI calls.
     Use Ctrl+C to stop the script.
 
+Requirements:
+
+psutil - python3 -m pip install psutil
 """
 
 
