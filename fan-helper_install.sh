@@ -11,7 +11,7 @@ SERVICE_FILE_CONTENT="[Unit]
 Description=Legion Go Fan helper method
 
 [Service]
-ExecStart=/usr/bin/python3 $SCRIPT_PATH --temp_high 85 --temp_low 80 --logging True
+ExecStart=/usr/bin/python3 $SCRIPT_PATH --temp_high 85 --temp_low 80 --logging False
 Restart=always
 User=$(whoami)
 Environment=\"PATH=/usr/bin:/bin\"
