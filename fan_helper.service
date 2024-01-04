@@ -1,0 +1,12 @@
+[Unit]
+Description=Legion Go Fan helper method
+
+[Service]
+# Modify values to customize the fan control 
+ExecStart=/usr/bin/python3 /home/legion/LLG_Dev_scripts/legion_fan_helper.py --temp_high 85 --temp_low 80
+Restart=always
+User=legion
+Environment="PATH=/usr/bin:/bin"
+
+[Install]
+WantedBy=multi-user.target
