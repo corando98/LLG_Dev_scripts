@@ -27,8 +27,15 @@ import logging
 from logging.handlers import RotatingFileHandler
 import subprocess
 import re
+import argparse
 
-ryzen_monitoring = False
+parser = argparse.ArgumentParser(description="Legion Fan Control and Monitoring Script")
+parser.add_argument("--temp_high", type=int, default=87, help="High temperature threshold for enabling full fan speed")
+parser.add_argument("--temp_low", type=int, default=83, help="Low temperature threshold for disabling full fan speed")
+parser.add_argument("--logging", type=bool, default=False, help="Enable or disable logging")
+args = parser.parse_args()
+
+ryzen_monitoring = False # Broken on N39
 
 # Configure logging
 log_format = "%(asctime)s - %(levelname)s - %(message)s"
@@ -42,6 +49,12 @@ file_handler.setFormatter(logging.Formatter(log_format))
 
 # Adding file handler to the root logger
 logging.getLogger('').addHandler(file_handler)
+
+# Display the initial configuration message
+print(f"Starting Legion Fan Control and Monitoring Script with the following settings:")
+print(f" - High Temperature Threshold: {args.temp_high}°C")
+print(f" - Low Temperature Threshold: {args.temp_low}°C")
+print(f" - Logging: {'Enabled' if args.logging else 'Disabled'}")
 
 def get_cpu_temperature():
     temps = psutil.sensors_temperatures()
@@ -126,48 +139,53 @@ def set_full_fan_speed(enable):
     command = f"echo '\\_SB.GZFD.WMAE 0 0x12 {status}04020000' | sudo tee /proc/acpi/call; sudo cat /proc/acpi/call"
     return execute_acpi_command(command)
 
-def monitor_and_adjust_fan_speed():
+def monitor_and_adjust_fan_speed(temp_high_threshold, temp_low_threshold, log_values):
     """
     Monitors the CPU temperature and adjusts the fan speed accordingly.
-    Enables full fan speed when the temperature reaches 85°C and disables it when the temperature goes below that threshold.
+    Args:
+        temp_high_threshold (int): Temperature to enable full fan speed.
+        temp_low_threshold (int): Temperature to disable full fan speed.
+        log_values (bool): If True, log the temperature and system status.
     """
-    TEMPERATURE_THRESHOLD_HIGH = 87  # Temperature to enable full fan speed
-    TEMPERATURE_THRESHOLD_LOW = 83   # Temperature to disable full fan speed
     full_speed_enabled = False  # Track the state of full fan speed mode
-
     try:
         while True:
             cpu_temp = get_cpu_temperature()
             if cpu_temp:
                 cpu_temp = int(cpu_temp)
-                logging.info(f"CPU Temperature: {cpu_temp}°C")
+                if log_values:
+                    logging.info(f"CPU Temperature: {cpu_temp}°C")
 
-                if cpu_temp >= TEMPERATURE_THRESHOLD_HIGH and not full_speed_enabled:
-                    logging.info("High temperature detected. Enabling full fan speed.")
+                if cpu_temp >= temp_high_threshold and not full_speed_enabled:
+                    if log_values:
+                        logging.info("High temperature detected. Enabling full fan speed.")
                     set_full_fan_speed(True)
                     full_speed_enabled = True
-                elif cpu_temp <= TEMPERATURE_THRESHOLD_LOW and full_speed_enabled:
-                    logging.info("Temperature back to normal. Disabling full fan speed.")
+                elif cpu_temp <= temp_low_threshold and full_speed_enabled:
+                    if log_values:
+                        logging.info("Temperature back to normal. Disabling full fan speed.")
                     set_full_fan_speed(False)
                     full_speed_enabled = False
 
             else:
-                logging.error("Could not read CPU temperature")
+                if log_values:
+                    logging.error("Could not read CPU temperature")
 
-            ac_status = get_ac_status()
-            if ac_status:
-                logging.info(f"AC Status: {ac_status}")
+            if log_values:
+                ac_status = get_ac_status()
+                if ac_status:
+                    logging.info(f"AC Status: {ac_status}")
 
-            if ryzen_monitoring:
-                ryzen_limits = get_ryzen_limits()
-                if ryzen_limits:
-                    ryzen_limits = format_selected_ryzenadj_output(ryzen_limits)
-                    logging.info(f"Ryzen Limits: {ryzen_limits}")
-
+                if ryzen_monitoring:
+                    ryzen_limits = get_ryzen_limits()
+                    if ryzen_limits:
+                        ryzen_limits = format_selected_ryzenadj_output(ryzen_limits)
+                        logging.info(f"Ryzen Limits: {ryzen_limits}")
 
             time.sleep(5)  # Check temperature every 5 seconds
     except KeyboardInterrupt:
         print("Monitoring stopped.")
 
+
 if __name__ == "__main__":
-    monitor_and_adjust_fan_speed()
+    monitor_and_adjust_fan_speed(args.temp_high, args.temp_low, args.logging)
