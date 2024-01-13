@@ -37,6 +37,7 @@ OUTPUT_FILE="$USER_HOME/gathered_info.txt"
     cat "$USER_HOME/.config/MangoHud/"* 2>/dev/null || echo "No files found in $USER_HOME/.config/MangoHud/"
 
     echo "----- Contents of $USER_HOME/.config/gamescope/ -----"
+    ls -al "$USER_HOME/.config/gamescope/"* 2>/dev/null || echo "No files found in $USER_HOME/.config/gamescope/"
     cat "$USER_HOME/.config/gamescope/"* 2>/dev/null || echo "No files found in $USER_HOME/.config/gamescope/"
 } >> "$OUTPUT_FILE"
 
