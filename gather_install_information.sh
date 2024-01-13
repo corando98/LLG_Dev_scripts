@@ -33,8 +33,11 @@ OUTPUT_FILE="$USER_HOME/gathered_info.txt"
     echo "----- ls -al /usr/bin | grep mango -----"
     ls -al /usr/bin | grep mango
 
-    echo "----- Contents of $USER_HOME/.config/environment.d/ -----"
-    cat "$USER_HOME/.config/environment.d/"* 2>/dev/null || echo "No files found in $USER_HOME/.config/environment.d/"
+    echo "----- Contents of $USER_HOME/.config/MangoHud/ -----"
+    cat "$USER_HOME/.config/MangoHud/"* 2>/dev/null || echo "No files found in $USER_HOME/.config/MangoHud/"
+
+    echo "----- Contents of $USER_HOME/.config/gamescope/ -----"
+    cat "$USER_HOME/.config/gamescope/"* 2>/dev/null || echo "No files found in $USER_HOME/.config/gamescope/"
 } >> "$OUTPUT_FILE"
 
 # Display a message
