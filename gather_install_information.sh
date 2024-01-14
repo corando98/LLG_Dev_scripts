@@ -18,6 +18,9 @@ OUTPUT_FILE="$USER_HOME/gathered_info.txt"
 
 # Gather information from various sources
 {
+    echo "------ Kernel --------"
+    uname -r
+    
     echo "----- $USER_HOME/.gamescope-cmd.log -----"
     cat "$USER_HOME/.gamescope-cmd.log" 2>/dev/null || echo "File not found: $USER_HOME/.gamescope-cmd.log"
 
