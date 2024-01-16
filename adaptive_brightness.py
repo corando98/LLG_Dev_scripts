@@ -14,16 +14,44 @@ Modify the following variables to adjust the algorithm:
     - silent: Silence all logging
 
     
-    
+
     Developer only variables: (Use these only if you know what you're doing)
     - num_readings: Number of sensor readings to average over
     - max_sensor_value: Maximum sensor value, used to scale the sensor readings
     - backlight_device: Backlight device name, used to locate the brightness file
     - step: Step size to adjust brightness by
     - max_backlight_value: Maximum brightness value, used to cap the brightness
+
+    Example systemd service file: (Replace /path/to/ with the actual path to the script)
+    location example '/etc/systemd/system/adaptive_brightness.service'
+
+    '''
+    [Unit]
+    Description=Adaptive Brightness Service
+    After=network.target
+
+    [Service]
+    Type=simple
+    ExecStart=/path/to/adaptive_brightness.py start
+    ExecStop=/path/to/adaptive_brightness.py pause
+    ExecReload=/path/to/adaptive_brightness.py resume
+    User=your_username
+    Group=your_group
+    Restart=on-failure
+
+    [Install]
+    '''
+
+    Then run the following commands:
+    WantedBy=multi-user.target
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now adaptive-brightness.service
+
+    sudo systemctl stop adaptive-brightness.service   # This will run the pause subcommand
+    sudo systemctl start adaptive-brightness.service  # This will run the start subcommand
 """
 
-# Recommended command: ./adaptive_brightness.py --min_brightness_level 400 --sensitivity_factor 1.0
 
 import os
 import sys
@@ -98,12 +126,27 @@ def locate_als_device():
                 device_name_path = os.path.join(iio_path, device_dir, 'name')
                 with open(device_name_path, 'r') as file:
                     if file.read().strip() == 'als':
+                        logging.debug(f"Found ALS device: {device_dir}")
                         return device_dir
     except OSError as e:
         logging.error(f"Failed to locate ALS device: {e}")
 
     logging.error('ALS device not found')
     sys.exit(1)
+
+def locate_backlight_device():
+    backlight_base_path = '/sys/class/backlight/'
+    try:
+        devices = os.listdir(backlight_base_path)
+        if devices:
+            logging.debug(f"Found backlight devices: {devices}")
+            return devices[0]  # Return the first found backlight device
+        else:
+            logging.error('No backlight devices found.')
+            sys.exit(1)
+    except OSError as e:
+        logging.error(f"Failed to locate backlight device: {e}")
+        sys.exit(1)
 
 def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor_value, min_brightness_level, pause):
     lock = Lock()
@@ -118,13 +161,14 @@ def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor
             try:
                 with open(sensor_file1, 'r') as file:
                     intensity = int(file.read().strip())
-                with open(sensor_file2, 'r') as file:
-                    illuminance = int(file.read().strip())
+                # with open(sensor_file2, 'r') as file:
+                #     illuminance = int(file.read().strip())
             except OSError as e:
                 logging.error(f"Failed to read sensor data: {e}")
                 continue
 
-            average_reading = (intensity + illuminance) // 2
+            # average_reading = (intensity + illuminance) // 2
+            average_reading = intensity
             readings.append(average_reading)
             readings = readings[-num_readings:]
 
@@ -140,26 +184,53 @@ def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor
             logging.debug("Brightness adjustments paused")
             sleep(5)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LtChipotle's Adaptive Brightness Algorithm with command line arguments.")
-    parser.add_argument('--min_brightness_level', type=int, default=200, help='The minimum brightness level to be set.')
-    parser.add_argument('--sensitivity_factor', type=float, default=1.0, help='The sensitivity factor for brightness adjustment.')
-    parser.add_argument('--pause', action='store_true', help='Pause brightness adjustments.')
-
-    parser.add_argument('--num_readings', type=int, default=10, help='The number of sensor readings to average. DEV')
-    parser.add_argument('--backlight_device', type=str, default='amdgpu_bl1', help='The backlight device to control.')
-    parser.add_argument('--max_sensor_value', type=int, default=2752, help='The maximum sensor value for brightness scaling. DEV')
-    parser.add_argument('--silent', action='store_true', help='Silence all logging.')
-    args = parser.parse_args()
-
-    if args.silent:
-        logging.disable(logging.CRITICAL)
-
+def start_service(args):
     run_main_loop(
         backlight_device=args.backlight_device,
         sensitivity_factor=args.sensitivity_factor,
         num_readings=args.num_readings,
         max_sensor_value=args.max_sensor_value,
         min_brightness_level=args.min_brightness_level,
-        pause=args.pause
+        pause=False
     )
+
+def pause_service(args):
+    # Implement logic to pause the service
+    # Possible implementation could be setting a flag file that your service monitors to know it should pause operation.
+    pass
+
+def resume_service(args):
+    # Implement logic to resume the service
+    pass
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="LtChipotle's Adaptive Brightness Algorithm")
+    subparsers = parser.add_subparsers(title='subcommands', description='valid subcommands', help='additional help')
+
+    backlight_device_default = locate_backlight_device()
+
+    # Start service subcommand
+    parser_start = subparsers.add_parser('start', help='Start the adaptive brightness service.')
+    parser_start.add_argument('--min_brightness_level', type=int, default=400, help='The minimum brightness level to be set.')
+    parser_start.add_argument('--sensitivity_factor', type=float, default=1.0, help='The sensitivity factor for brightness adjustment.')
+    parser_start.add_argument('--silent', action='store_true', help='Silence all logging.')
+    parser_start.add_argument('--backlight_device', type=str, default=backlight_device_default, help='The backlight device to control. (DEV)')
+    parser_start.add_argument('--num_readings', type=int, default=10, help='The number of sensor readings to average. (DEV)')
+    parser_start.add_argument('--max_sensor_value', type=int, default=2752, help='The maximum sensor value for brightness scaling. (DEV)')
+    parser_start.set_defaults(func=start_service)
+    if parser_start.parse_known_args()[0].silent:
+        logging.disable(logging.CRITICAL)
+
+    # Pause service subcommand
+    parser_pause = subparsers.add_parser('pause', help='Pause the adaptive brightness service.')
+    parser_pause.set_defaults(func=pause_service)
+
+    # Resume service subcommand
+    parser_resume = subparsers.add_parser('resume', help='Resume the adaptive brightness service.')
+    parser_resume.set_defaults(func=resume_service)
+
+    args = parser.parse_args()
+    if 'func' in args:
+        args.func(args)
+    else:
+        parser.print_help()
