@@ -65,9 +65,17 @@ Modify the following variables to adjust the algorithm:
 # Constant for pause flag file
 PAUSE_FLAG_FILE_PATH = '/tmp/adaptive_brightness_pause.flag'
 
+# Constants for stability detection\
+
+# This is delta value for the moving average to be considered stable, if the delta is within this value for STABILITY_DURATION amount of time, the cooldown will be increased to reduce constant brightness changes, flickering, etc. This also prevents the brightness from changing too quickly, and applies hysterisis.
+STABILITY_THRESHOLD = 5  
+# The amount of time the moving average has to be stable for before the cooldown is increased.
+STABILITY_DURATION = 60  
+
 import os
 import sys
 import logging
+import time
 from time import sleep
 from math import log
 from threading import Lock
@@ -160,13 +168,19 @@ def locate_backlight_device():
         logging.error(f"Failed to locate backlight device: {e}")
         sys.exit(1)
 
-def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor_value, min_brightness_level, pause):
+
+def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor_value, min_brightness_level, pause, stability_threshold=STABILITY_THRESHOLD, stability_duration=STABILITY_DURATION):
     lock = Lock()
     als_device = locate_als_device()
     sensor_file1 = f'/sys/bus/iio/devices/{als_device}/in_intensity_both_raw'
     sensor_file2 = f'/sys/bus/iio/devices/{als_device}/in_illuminance_raw'
 
     readings = []
+
+    last_change_time = time.monotonic()
+    stable_value = None
+    cooldown_period = 1 # Start with 1 second cooldown period
+
 
     while True:
         if os.path.exists(PAUSE_FLAG_FILE_PATH):
@@ -190,12 +204,26 @@ def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor
 
             moving_average = sum(readings) / len(readings)
             logging.debug(f"Moving average: {moving_average}")
-            with lock:
-                adjust_display_brightness(
-                    moving_average, 
-                    backlight_device, 
-                    max_sensor_value=max_sensor_value, sensitivity_factor=sensitivity_factor, min_brightness_level=min_brightness_level)
-            sleep(1)
+            if stable_value is not None:
+                logging.debug(f"Stability delta: {abs(moving_average - stable_value)}")
+            if stable_value is None or abs(moving_average - stable_value) > stability_threshold:
+                stable_value = moving_average
+                last_change_time = time.monotonic()
+                cooldown_period = 1 # Reset cooldown period to 1 second
+                logging.debug(f"Resetting cooldown period: {cooldown_period}")
+            elif (time.monotonic() - last_change_time) >= stability_duration:
+                # If the value has been stable for longer than STABILITY_DURATION, increase cooldown period
+                cooldown_period = min(cooldown_period * 2, 30)  # Maximum cooldown period of 30 seconds
+                logging.debug(f"Increasing cooldown period: {cooldown_period}")
+            if cooldown_period == 1 or time.monotonic() - last_change_time < stability_duration:
+                # Change brightness if not in cooldown or within the stability duration
+                with lock:
+                    adjust_display_brightness(
+                        moving_average, 
+                        backlight_device, 
+                        max_sensor_value=max_sensor_value, sensitivity_factor=sensitivity_factor, min_brightness_level=min_brightness_level)
+            logging.debug(f"Cooldown period: {cooldown_period}")
+            sleep(cooldown_period)
         else:
             logging.debug("Brightness adjustments paused")
             sleep(5)
