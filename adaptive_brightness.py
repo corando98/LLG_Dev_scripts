@@ -32,26 +32,37 @@ Modify the following variables to adjust the algorithm:
 
     [Service]
     Type=simple
-    ExecStart=/path/to/adaptive_brightness.py start
-    ExecStop=/path/to/adaptive_brightness.py pause
+    ExecStart=/path/to/adaptive_brightness.py start --min_brightness_level 400 --sensitivity_factor 1.0
+    ExecStop=/path/to/adaptive_brightness.py pause 
     ExecReload=/path/to/adaptive_brightness.py resume
     User=your_username
-    Group=your_group
     Restart=on-failure
-
+    RestartSec=5s
     [Install]
+    WantedBy=multi-user.target
+
     '''
 
     Then run the following commands:
-    WantedBy=multi-user.target
 
     sudo systemctl daemon-reload
     sudo systemctl enable --now adaptive-brightness.service
 
     sudo systemctl stop adaptive-brightness.service   # This will run the pause subcommand
     sudo systemctl start adaptive-brightness.service  # This will run the start subcommand
-"""
+    sudo systemctl reload adaptie-brightness.service  # This will run the resume subcommand
 
+
+    Sysfs control files:
+    /tmp/adaptive_brightness_pause.flag: Pause flag file, if this file exists, the service will pause brightness adjustments.
+
+    example: touch /tmp/adaptive_brightness_pause.flag # This will pause brightness adjustments
+                rm /tmp/adaptive_brightness_pause.flag   # This will resume brightness adjustments
+
+
+"""
+# Constant for pause flag file
+PAUSE_FLAG_FILE_PATH = '/tmp/adaptive_brightness_pause.flag'
 
 import os
 import sys
@@ -157,6 +168,10 @@ def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor
     readings = []
 
     while True:
+        if os.path.exists(PAUSE_FLAG_FILE_PATH):
+            logging.info("Brightness adjustment is paused due to flag file.")
+            sleep(5)
+            continue
         if not pause:
             try:
                 with open(sensor_file1, 'r') as file:
@@ -195,12 +210,19 @@ def start_service(args):
     )
 
 def pause_service(args):
-    # Implement logic to pause the service
-    # Possible implementation could be setting a flag file that your service monitors to know it should pause operation.
+    # Create a flag file to signal that the service should pause.
+    with open(PAUSE_FLAG_FILE_PATH, 'w') as f:
+        pass  # The existence of the file is the pause flag; it can be empty.
+    logging.info("Adaptive brightness adjustment paused.")
     pass
 
 def resume_service(args):
-    # Implement logic to resume the service
+    # Remove the flag file to signal that the service should resume.
+    try:
+        os.remove(PAUSE_FLAG_FILE_PATH)
+        logging.info("Adaptive brightness adjustment resumed.")
+    except FileNotFoundError:
+        logging.warning("Adaptive brightness adjustment was not paused.")
     pass
 
 if __name__ == "__main__":
