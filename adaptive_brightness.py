@@ -54,6 +54,7 @@ Modify the following variables to adjust the algorithm:
 
 
     Sysfs control files:
+    
     /tmp/adaptive_brightness_pause.flag: Pause flag file, if this file exists, the service will pause brightness adjustments.
 
     example: touch /tmp/adaptive_brightness_pause.flag # This will pause brightness adjustments
