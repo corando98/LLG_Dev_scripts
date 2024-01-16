@@ -10,9 +10,12 @@ Modify the following variables to adjust the algorithm:
     User variables: 
     - sensitivity_factor: Adjusts how sensitive the algorithm is to changes in light, higher values = steeper curve
     - min_brigthness_level: Adjusts the minimum brightness level, higher values = brighter minimum brightness
+    - pause: Pause brightness adjustments
+    - silent: Silence all logging
 
-
-    Developer only variables:
+    
+    
+    Developer only variables: (Use these only if you know what you're doing)
     - num_readings: Number of sensor readings to average over
     - max_sensor_value: Maximum sensor value, used to scale the sensor readings
     - backlight_device: Backlight device name, used to locate the brightness file
@@ -20,6 +23,7 @@ Modify the following variables to adjust the algorithm:
     - max_backlight_value: Maximum brightness value, used to cap the brightness
 """
 
+# Recommended command: ./adaptive_brightness.py --min_brightness_level 400 --sensitivity_factor 1.0
 
 import os
 import sys
@@ -27,6 +31,8 @@ import logging
 from time import sleep
 from math import log
 from threading import Lock
+import argparse
+
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -99,7 +105,7 @@ def locate_als_device():
     logging.error('ALS device not found')
     sys.exit(1)
 
-def run_main_loop(backlight_device='amdgpu_bl1', sensitivity_factor=1.0, num_readings=10, max_sensor_value=2752, min_brigthness_level=10):
+def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor_value, min_brightness_level, pause):
     lock = Lock()
     als_device = locate_als_device()
     sensor_file1 = f'/sys/bus/iio/devices/{als_device}/in_intensity_both_raw'
@@ -108,29 +114,52 @@ def run_main_loop(backlight_device='amdgpu_bl1', sensitivity_factor=1.0, num_rea
     readings = []
 
     while True:
-        try:
-            with open(sensor_file1, 'r') as file:
-                intensity = int(file.read().strip())
-            with open(sensor_file2, 'r') as file:
-                illuminance = int(file.read().strip())
-        except OSError as e:
-            logging.error(f"Failed to read sensor data: {e}")
-            continue
+        if not pause:
+            try:
+                with open(sensor_file1, 'r') as file:
+                    intensity = int(file.read().strip())
+                with open(sensor_file2, 'r') as file:
+                    illuminance = int(file.read().strip())
+            except OSError as e:
+                logging.error(f"Failed to read sensor data: {e}")
+                continue
 
-        average_reading = (intensity + illuminance) // 2
-        readings.append(average_reading)
-        readings = readings[-num_readings:]
+            average_reading = (intensity + illuminance) // 2
+            readings.append(average_reading)
+            readings = readings[-num_readings:]
 
-        moving_average = sum(readings) / len(readings)
-        logging.debug(f"Moving average: {moving_average}")
-        with lock:
-            adjust_display_brightness(
-                moving_average, 
-                backlight_device, 
-                max_sensor_value=max_sensor_value, sensitivity_factor=sensitivity_factor, min_brightness_level=min_brigthness_level)
-        sleep(1)
+            moving_average = sum(readings) / len(readings)
+            logging.debug(f"Moving average: {moving_average}")
+            with lock:
+                adjust_display_brightness(
+                    moving_average, 
+                    backlight_device, 
+                    max_sensor_value=max_sensor_value, sensitivity_factor=sensitivity_factor, min_brightness_level=min_brightness_level)
+            sleep(1)
+        else:
+            logging.debug("Brightness adjustments paused")
+            sleep(5)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="LtChipotle's Adaptive Brightness Algorithm with command line arguments.")
+    parser.add_argument('--min_brightness_level', type=int, default=200, help='The minimum brightness level to be set.')
+    parser.add_argument('--sensitivity_factor', type=float, default=1.0, help='The sensitivity factor for brightness adjustment.')
+    parser.add_argument('--pause', action='store_true', help='Pause brightness adjustments.')
+
+    parser.add_argument('--num_readings', type=int, default=10, help='The number of sensor readings to average. DEV')
+    parser.add_argument('--backlight_device', type=str, default='amdgpu_bl1', help='The backlight device to control.')
+    parser.add_argument('--max_sensor_value', type=int, default=2752, help='The maximum sensor value for brightness scaling. DEV')
+    parser.add_argument('--silent', action='store_true', help='Silence all logging.')
+    args = parser.parse_args()
+
+    if args.silent:
+        logging.disable(logging.CRITICAL)
+
     run_main_loop(
-        sensitivity_factor=1, #Adjusts how sensitive the algorithm is to changes in light, higher values = steeper curve
-        min_brigthness_level=400) #Adjusts the minimum brightness level, higher values = brighter minimum brightness
+        backlight_device=args.backlight_device,
+        sensitivity_factor=args.sensitivity_factor,
+        num_readings=args.num_readings,
+        max_sensor_value=args.max_sensor_value,
+        min_brightness_level=args.min_brightness_level,
+        pause=args.pause
+    )
