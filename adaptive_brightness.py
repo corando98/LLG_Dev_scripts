@@ -10,16 +10,46 @@ Modify the following variables to adjust the algorithm:
     User variables: 
     - sensitivity_factor: Adjusts how sensitive the algorithm is to changes in light, higher values = steeper curve
     - min_brigthness_level: Adjusts the minimum brightness level, higher values = brighter minimum brightness
+    - step: Step size to adjust brightness by
     - pause: Pause brightness adjustments
     - silent: Silence all logging
 
+    To adjust the algorithm to your liking play with:
+    - sensitivity_factor, min_brightness_level, step
+
+
+    Some profiles, which are not implemented yet, but can be used as a reference:
+    PROFILE_CONFIGS = {
+    'reading': {'sensitivity_factor': 0.8, 'min_brightness_level': 100, 'step': 50},
+    'day': {'sensitivity_factor': 1.5, 'min_brightness_level': 200, 'step': 100},
+    'evening': {'sensitivity_factor': 1.2, 'min_brightness_level': 50, 'step': 50},
+    'movie': {'sensitivity_factor': 0.5, 'min_brightness_level': 80, 'step': 20},
+    'night': {'sensitivity_factor': 0.3, 'min_brightness_level': 10, 'step': 30},
+    }   
+
+Reading Mode:
+    Smoother adjustments are fine here because users will not expect quick changes in ambient light when focused on reading.
+    Proposed step: 50 (reduces the full-scale adjustment time to about 8 seconds)
+Day Mode:
+    During the day, users might expect quicker adjustments.
+    Proposed step: 100 (reduces the full-scale adjustment time to about 4 seconds)
+Evening Mode:
+    Evening light changes can be more gradual, so a moderate speed is suitable.
+    Proposed step: 50
+Movie Mode:
+    Avoiding distractions is key, so the slowest and smoothest transitions are ideal.
+    Proposed step: 20 (still relatively smooth but a bit quicker to react)
+Night Mode:
+    Brightness should not change rapidly during the night to avoid disturbing users.
+    Proposed step: 30 (smooth adjustments without being too slow)
+
     
+
 
     Developer only variables: (Use these only if you know what you're doing)
     - num_readings: Number of sensor readings to average over
     - max_sensor_value: Maximum sensor value, used to scale the sensor readings
     - backlight_device: Backlight device name, used to locate the brightness file
-    - step: Step size to adjust brightness by
     - max_backlight_value: Maximum brightness value, used to cap the brightness
 
     Example systemd service file: (Replace /path/to/ with the actual path to the script)
@@ -71,6 +101,7 @@ PAUSE_FLAG_FILE_PATH = '/tmp/adaptive_brightness_pause.flag'
 STABILITY_THRESHOLD = 5  
 # The amount of time the moving average has to be stable for before the cooldown is increased.
 STABILITY_DURATION = 60  
+# The value of STABILITY_DURATION set to 60 indicates the duration (in seconds) the moving average has to remain stable within the STABILITY_THRESHOLD before the cooldown period is increased. This is separate from the maximum cooldown period, which is the longest delay between subsequent brightness adjustments when the moving average is stable.
 
 import os
 import sys
@@ -113,6 +144,7 @@ def write_brightness(backlight_device, brightness, max_backlight_value=4095):
         return False
     return True
 
+
 def adjust_display_brightness(sensor_reading, backlight_device, max_sensor_value=2752, max_backlight_value=4095, step=10, sensitivity_factor=1.0, min_brightness_level=10):
     logging.debug("Adjusting display brightness")
     
@@ -125,12 +157,15 @@ def adjust_display_brightness(sensor_reading, backlight_device, max_sensor_value
     step_value = step if target_brightness > current_brightness else -step
     new_brightness = current_brightness
 
+    # Smaller sleep time for quicker adjustments or larger for smoother adjustments
+    adjustment_interval = 0.05 if step > 50 else 0.1
+
     while abs(target_brightness - new_brightness) >= step:
         new_brightness += step_value
         if not write_brightness(backlight_device, new_brightness, max_backlight_value):
             break
         logging.debug(f"Adjusting brightness: {new_brightness}")
-        sleep(0.05) #smoothen transition
+        sleep(adjustment_interval) #smoothen transition
 
     if not write_brightness(backlight_device, target_brightness, max_backlight_value):
         logging.error("Failed to set brightness")
@@ -169,7 +204,7 @@ def locate_backlight_device():
         sys.exit(1)
 
 
-def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor_value, min_brightness_level, pause, stability_threshold=STABILITY_THRESHOLD, stability_duration=STABILITY_DURATION):
+def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor_value, min_brightness_level, pause, stability_threshold=STABILITY_THRESHOLD, stability_duration=STABILITY_DURATION, step=10):
     lock = Lock()
     als_device = locate_als_device()
     sensor_file1 = f'/sys/bus/iio/devices/{als_device}/in_intensity_both_raw'
@@ -184,7 +219,7 @@ def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor
 
     while True:
         if os.path.exists(PAUSE_FLAG_FILE_PATH):
-            logging.info("Brightness adjustment is paused due to flag file.")
+            logging.info("Brightness adjustment is paused due to flag file at {}".format(PAUSE_FLAG_FILE_PATH))
             sleep(5)
             continue
         if not pause:
@@ -221,7 +256,10 @@ def run_main_loop(backlight_device, sensitivity_factor, num_readings, max_sensor
                     adjust_display_brightness(
                         moving_average, 
                         backlight_device, 
-                        max_sensor_value=max_sensor_value, sensitivity_factor=sensitivity_factor, min_brightness_level=min_brightness_level)
+                        max_sensor_value=max_sensor_value, 
+                        sensitivity_factor=sensitivity_factor, 
+                        min_brightness_level=min_brightness_level,
+                        step=step)
             logging.debug(f"Cooldown period: {cooldown_period}")
             sleep(cooldown_period)
         else:
@@ -235,21 +273,22 @@ def start_service(args):
         num_readings=args.num_readings,
         max_sensor_value=args.max_sensor_value,
         min_brightness_level=args.min_brightness_level,
-        pause=False
+        pause=False,
+        step=args.step
     )
 
 def pause_service(args):
     # Create a flag file to signal that the service should pause.
     with open(PAUSE_FLAG_FILE_PATH, 'w') as f:
         pass  # The existence of the file is the pause flag; it can be empty.
-    logging.info("Adaptive brightness adjustment paused.")
+    logging.info("Adaptive brightness adjustment paused. File created: /tmp/adaptive_brightness_pause.flag")
     pass
 
 def resume_service(args):
     # Remove the flag file to signal that the service should resume.
     try:
         os.remove(PAUSE_FLAG_FILE_PATH)
-        logging.info("Adaptive brightness adjustment resumed.")
+        logging.info("Adaptive brightness adjustment resumed. File removed: /tmp/adaptive_brightness_pause.flag")
     except FileNotFoundError:
         logging.warning("Adaptive brightness adjustment was not paused.")
     pass
@@ -264,6 +303,7 @@ if __name__ == "__main__":
     parser_start = subparsers.add_parser('start', help='Start the adaptive brightness service.')
     parser_start.add_argument('--min_brightness_level', type=int, default=400, help='The minimum brightness level to be set.')
     parser_start.add_argument('--sensitivity_factor', type=float, default=1.0, help='The sensitivity factor for brightness adjustment.')
+    parser_start.add_argument('--step', type=int, default=50, help='The step size to adjust brightness by.')
     parser_start.add_argument('--silent', action='store_true', help='Silence all logging.')
     parser_start.add_argument('--backlight_device', type=str, default=backlight_device_default, help='The backlight device to control. (DEV)')
     parser_start.add_argument('--num_readings', type=int, default=10, help='The number of sensor readings to average. (DEV)')
