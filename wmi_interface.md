@@ -1,4 +1,7 @@
 # Legion Go Internals
+
+Credits to Antheas for this work
+
 ## ACPI Documentation
 You can find the documentation of the WMI interfaces below.
 A WMI interface is an ACPI method where: Arg0 is the index the call
