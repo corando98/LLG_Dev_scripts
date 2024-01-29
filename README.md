@@ -159,12 +159,32 @@ To start the adaptive brightness service with default or custom settings:
 Options
 
 - `--min_brightness_level`: The minimum brightness level (default: 400).
+- `--sensor_shift`: The curve shift (left/right) (default: -3).
 - `--sensitivity_factor`: Adjusts the sensitivity to light changes (default: 1.0).
 - `--step`: Step size for brightness adjustments (default: 50).
 - `--silent`: Silence all logging (optional).
 - `--backlight_device`: Specify the backlight device (optional).
 - `--num_readings`: Number of sensor readings to average (developer only).
 - `--max_sensor_value`: Maximum sensor value for scaling (developer only).
+
+### Finding your perfect settings
+
+A script that controls the script running in the background is provided. This script allows you to adjust the settings and see the results in real-time.
+
+```
+./helper_adaptive_brightness.py
+```
+
+Pressing `c` will print the current settings. Pressing `q` will quit the script.
+
+For now the settings are not saved, so you will have to manually set them in the `adaptive_brightness.py` script using the `--start` command (see above).
+
+![Effect of sensor shift on curve](effectofsensorshift.png)
+![Different profiles](adaptivebrightness_sensorshift.png)
+
+Note that the sensor shift is the shift of the curve, not the shift of the sensor value. A negative sensor shift means that the curve is shifted to the left, and a positive sensor shift means that the curve is shifted to the right.
+
+Adjusting sensitivity factor will shrink or grow the curve. A sensitivity factor of 1.0 means that the curve is not changed. A sensitivity factor of 0.5 means that the curve is half the size of the original curve (This means that your max brightness is halved). A sensitivity factor of 2.0 means that the curve is twice the size of the original curve, once the max brightness is reached the value is clamped.
 
 ### Pausing the Service
 To pause brightness adjustments:
@@ -188,7 +208,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/path/to/adaptive_brightness.py start --min_brightness_level 400 --sensitivity_factor 1.0
+ExecStart=/path/to/adaptive_brightness.py start --min_brightness_level 400 --sensitivity_factor 1.0 --sensor_shift -3
 ExecStop=/path/to/adaptive_brightness.py pause 
 ExecReload=/path/to/adaptive_brightness.py resume
 User=your_username
