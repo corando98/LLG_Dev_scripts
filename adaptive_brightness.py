@@ -119,7 +119,7 @@ def check_for_commands():
 # This is delta value for the moving average to be considered stable, if the delta is within this value for STABILITY_DURATION amount of time, the cooldown will be increased to reduce constant brightness changes, flickering, etc. This also prevents the brightness from changing too quickly, and applies hysterisis.
 STABILITY_THRESHOLD = 5  
 # The amount of time the moving average has to be stable for before the cooldown is increased.
-STABILITY_DURATION = 120
+STABILITY_DURATION = 60
 # The value of STABILITY_DURATION set to 60 indicates the duration (in seconds) the moving average has to remain stable within the STABILITY_THRESHOLD before the cooldown period is increased. This is separate from the maximum cooldown period, which is the longest delay between subsequent brightness adjustments when the moving average is stable.
 
 import os
