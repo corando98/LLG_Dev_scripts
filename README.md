@@ -2,11 +2,75 @@
 
 ## Scripts
 
-- LegionSpace.py: Script used to interact with the ACPI interface of the Legion GO, used to set custom mode, control TDP values, uses the same functions are Legion Space in Windows
+- legiongo_control.py: Script used to interact with the ACPI interface of the Legion GO, used to set custom mode, control TDP values, uses the same functions are Legion Space in Windows
+- legion_controller_configurator.py: Script used to configure the controller, remap buttons, set deadzone, sensitivity curve, etc.
+- adaptive_brightness.py: Script used to control brightness in linux, uses the ambient light sensor.
 - legion_fan_helper.py: Scripts that is meant to be ran as a service in Linux, sets a temp threshold and sets the fan speed to max to avoid thermal shutoff. This also logs the value in case of a random shutdown.
 - Experiments/rumble_sim.py: This script might simulate a rumble effect, for testing or demonstration purposes.
 
 
+# Legion Go Control Script
+
+This script provides various commands to control and configure the Legion Go controller. It uses specific ACPI calls for the Legion Go hardware.
+
+## How to use
+
+```./legiongo_control.py --help```
+
+## Command Usage
+
+### General Commands
+
+#### `--set-smart-fan-mode`
+- **Description**: Set the Smart Fan Mode.
+- **Usage**: `--set-smart-fan-mode [value]`
+- **Values**:
+  - `1`: Quiet Mode (Blue LED)
+  - `2`: Balanced Mode (White LED)
+  - `3`: Performance Mode (Red LED)
+  - `224`: Extreme Mode
+  - `255`: Custom Mode (Purple LED)
+
+#### `--get-smart-fan-mode`
+- **Description**: Get the current Smart Fan Mode.
+- **Usage**: `--get-smart-fan-mode`
+
+#### `--set-tdp`
+- **Description**: Set TDP value.
+- **Usage**: `--set-tdp [MODE] [WATTAGE]`
+- **Modes**: `Slow`, `Steady`, `Fast`
+
+#### `--get-tdp`
+- **Description**: Get TDP value for a specific mode.
+- **Usage**: `--get-tdp [MODE]`
+- **Modes**: `Slow`, `Steady`, `Fast`, `ALL`
+
+#### `--set-fan-curve`
+- **Description**: Set a custom fan curve.
+- **Usage**: `--set-fan-curve [speeds]`
+- **Example**: `--set-fan-curve 0 10 20 30 40 50 60 70 80 90 100`
+
+#### `--set-full-speed`
+- **Description**: Set fan speed to 100%, bypassing the fan curve.
+- **Usage**: `--set-full-speed [1/0]`
+
+#### `--get-fan-curve`
+- **Description**: Get the current fan curve settings.
+- **Usage**: `--get-fan-curve`
+
+#### `--verbose`
+- **Description**: Enable verbose logging.
+- **Usage**: `--verbose`
+
+### Specific Commands
+
+#### `--set-deadzone`
+- **Description**: Set the deadzone level for a controller.
+- **Usage**: `--set-deadzone [left/right] [level]`
+
+#### `--set-curve`
+- **Description**: Set the sensitivity curve for a controller.
+- **Usage**: `--set-curve [left/right] [tx] [ty] [bx] [by]`
 
 
 
@@ -70,3 +134,78 @@ The following graph illustrates an example sensitivity curve for the controller 
 ![Sensitivity Curve](legion_configuration_curve_example.png)
 
 The curve indicates how the controller's sensitivity responds across its range, providing higher sensitivity towards the higher end of the input values.
+
+
+# LtChipotle's Adaptive Brightness Algorithm
+
+This script provides adaptive brightness algorithm for the Legion Go. It allows fine-tuning of the brightness response to ambient light changes.
+
+## Features
+
+- Adjusts display brightness based on ambient light sensor readings.
+- Customizable sensitivity and minimum brightness level.
+- Smooth brightness adjustments with configurable steps.
+
+## Usage
+
+### Starting the Service
+
+To start the adaptive brightness service with default or custom settings:
+
+```bash
+./adaptive_brightness.py start [OPTIONS]
+```
+
+Options
+
+- `--min_brightness_level`: The minimum brightness level (default: 400).
+- `--sensitivity_factor`: Adjusts the sensitivity to light changes (default: 1.0).
+- `--step`: Step size for brightness adjustments (default: 50).
+- `--silent`: Silence all logging (optional).
+- `--backlight_device`: Specify the backlight device (optional).
+- `--num_readings`: Number of sensor readings to average (developer only).
+- `--max_sensor_value`: Maximum sensor value for scaling (developer only).
+
+### Pausing the Service
+To pause brightness adjustments:
+```
+./adaptive_brightness.py pause
+```
+### Resuming the Service
+To resume brightness adjustments:
+```
+./adaptive_brightness.py resume
+```
+### Systemd Service Integration
+You can integrate this script as a systemd service for automatic start on boot.
+
+1. Create a systemd service file (e.g., adaptive_brightness.service) with the following content:
+
+```
+[Unit]
+Description=Adaptive Brightness Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/path/to/adaptive_brightness.py start --min_brightness_level 400 --sensitivity_factor 1.0
+ExecStop=/path/to/adaptive_brightness.py pause 
+ExecReload=/path/to/adaptive_brightness.py resume
+User=your_username
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+2. Run the following commands to enable and start the service:
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now adaptive-brightness.service
+```
+3. Control the service using:
+```
+sudo systemctl stop adaptive-brightness.service   # Pause
+sudo systemctl start adaptive-brightness.service  # Start
+sudo systemctl reload adaptive-brightness.service # Resume
+```
