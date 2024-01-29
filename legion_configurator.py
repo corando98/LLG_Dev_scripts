@@ -1,5 +1,8 @@
+#!/bin/python3
 import hid
 import time
+import argparse
+import sys
 # Global variables
 vendor_id = 0x17EF
 product_id_match = lambda x: x & 0xFFF0 == 0x6180
@@ -291,20 +294,6 @@ def create_sensitivity_command(controller, tx, ty, bx, by):
     ]
     return bytes(command) + bytes([0xCD] * (64 - len(command)))
 
-def create_deadzone_command(controller):
-    """
-    Create a command for querying or setting the deadzones.
-
-    :param controller: byte - The controller byte (0x03 for left, 0x04 for right)
-    :return: bytes - The command byte array
-    """
-    command = [
-        0x05, 0x05,  # Report ID and Length
-        0x3f, 0x07,  # Command and sub-parameter
-        controller, 0x01  # Controller and command end marker
-    ]
-    return bytes(command) + bytes([0xCD] * (64 - len(command)))
-
 """
 Getter functions for the controller settings. (untested)
 """
@@ -347,31 +336,121 @@ def create_vibration_sensitivity_command():
     ]
     return bytes(command) + bytes([0xCD] * (64 - len(command)))
 
-# Example usage:
-# leds_command = create_leds_command(0x04)  # Example for right controller
-# response = send_command(leds_command, read_response=True)
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+    
+def controller_mapping(value):
+    mapping = {
+        'left': 0x03,
+        'right': 0x04
+    }
+    print(value.lower())  
+    print(mapping[value.lower()])  
+    if value.lower() in mapping:
+        return mapping[value.lower()]
+    else:
+        raise argparse.ArgumentTypeError('Invalid controller. Use "left" or "right".')
+def main():
+    parser = argparse.ArgumentParser(description='Legion Controller Configurator Script')
 
-# vibration_sensitivity_command = create_vibration_sensitivity_command()
-# response = send_command(vibration_sensitivity_command, read_response=True)
+    # Argument for touchpad vibration
+    parser.add_argument('--touchpad-vibration', type=str2bool, default=None, 
+                        metavar=('bool'),
+                        help='Enable or disable touchpad vibration (True/False), example: --touchpad-vibration True')
+    # Argument for RGB control
+    parser.add_argument('--rgb-control', nargs=6, metavar=('CONTROLLER', 'MODE', 'COLOR', 'BRIGHTNESS', 'SPEED', 'PROFILE'),
+                        help='Control RGB settings: controller ("left" or "right"), mode (byte), color (R G B), brightness (byte), speed (byte), profile (byte)')
 
+    # Argument for gyro remap
+    parser.add_argument('--gyro-remap', nargs=2, metavar=('GYRO', 'JOYSTICK'),
+                        help='Set gyro remapping: gyro setting (byte), joystick value (byte), left controller gyro is 1, right controller gyro is 2. i.e. --gyro-remap 1 1 maps the left controller gyro to the left joystick, --gyro-remap 2 1 maps the right controller gyro to the left joystick,etc. Mapping 0: Disabled, 1: left joystick, 2: right joystick')
 
-# sleepLeft = create_sleep_time_command(0x03, 0x1e)
-# send_command(sleepLeft)
-# sleepRight = create_sleep_time_command(0x04, 5)
-# send_command(sleepRight)
-# leftSens = create_sensitivity_command(0x03, 85, 85 ,5 , 30)
-# send_command(leftSens)
-# rightSens = create_sensitivity_command(0x04, 85, 85 ,5 , 30)
-# send_command(rightSens)
-# vib = create_vibration_command(0x03, 0x03)
-# send_command(vib)
-# vib2 = create_vibration_command(0x04, 0x03)
-# send_command(vib2)
+    parser.add_argument('--button-remap', nargs=3, metavar=('CONTROLLER', 'BUTTON', 'ACTION'),
+                        help='Remap a button: controller ("left" or "right"), button code, action code')
 
-# touchVib = create_touchpad_vibration_command(False)
-# send_command(touchVib)
+    parser.add_argument('--vibration-level', nargs=2, metavar=('CONTROLLER', 'LEVEL'),
+                        help='Set vibration level: controller ("left" or "right"), level (byte)')
 
-# deadzone = create_deadzone_command(0x03, 0x05)
-# deadzone2 = create_deadzone_command(0x04, 0x05)
-# send_command(deadzone)
-# send_command(deadzone2) 
+    parser.add_argument('--fps-remap', nargs=4, metavar=('CONTROLLER', 'PROFILE', 'BUTTON', 'ACTION'),
+                        help='FPS remapping: controller ("left" or "right"), profile (byte), button (byte), action (byte)')
+
+    parser.add_argument('--sleep-time', nargs=2, metavar=('CONTROLLER', 'TIME'),
+                        help='Set the sleep time of the controller: controller ("left" or "right"), time in minutes')
+
+    # Argument for setting deadzone
+    parser.add_argument('--deadzone', nargs=2, metavar=('CONTROLLER', 'LEVEL'),
+                        help='Set deadzone level: controller ("left" or "right"), level (byte), default is 4. This is percentage of the stick. i.e. --deadzone left 4 sets the deadzone of the left controller to 4%')
+
+    # Argument for setting sensitivity curve
+    parser.add_argument('--curve', nargs=5, metavar=('CONTROLLER', 'TX', 'TY', 'BX', 'BY'),
+                        help='Set sensitivity curve: controller ("left" or "right"), top x, top y, bottom x, bottom y. i.e. --curve left 0 0 0 0 sets the sensitivity curve of the left controller to the default curve. The default curve is a straight line. Lenovo allows for only two points for the curve, the curve is interpolated between the two points. Check repo for example picture using --curve right 85 85 5 30')
+
+    
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+    args = parser.parse_args()
+    
+    # Process touchpad vibration argument
+    if args.touchpad_vibration is not None:
+        touch_vib_command = create_touchpad_vibration_command(args.touchpad_vibration)
+        send_command(touch_vib_command)
+
+    # Process RGB control argument
+    if args.rgb_control:
+        controller_arg, mode, color, brightness, speed, profile = args.rgb_control
+        controller = controller_mapping(controller_arg)
+        rgb_command = create_rgb_control_command(controller, int(mode), bytes.fromhex(color), int(brightness), int(speed), int(profile))
+        send_command(rgb_command)
+    # Process gyro remap argument
+    if args.gyro_remap:
+        gyro, joystick = args.gyro_remap
+        gyro_remap_command = create_gyro_remap_command(int(gyro), int(joystick))
+        send_command(gyro_remap_command)
+
+    if args.button_remap:
+        controller_arg, button, action = args.button_remap
+        controller = controller_mapping(controller_arg)
+        button_remap_command = create_button_remap_command(controller, int(button), int(action))
+        send_command(button_remap_command)
+
+    if args.vibration_level:
+        controller_arg, level = args.vibration_level
+        controller = controller_mapping(controller_arg)
+        vibration_command = create_vibration_command(controller, int(level))
+        send_command(vibration_command)
+
+    if args.fps_remap:
+        controller_arg, profile, button, action = args.fps_remap
+        controller = controller_mapping(controller_arg)
+        fps_remap_command = create_fps_remap_command(controller, int(profile), int(button), int(action))
+        send_command(fps_remap_command)
+
+    # Process sleep time argument
+    if args.sleep_time:
+        controller_arg, time_in_minutes = args.sleep_time
+        controller = controller_mapping(controller_arg)
+        sleep_time_command = create_sleep_time_command(controller, int(time_in_minutes))
+        send_command(sleep_time_command)
+    
+    if args.deadzone:
+        controller_arg, level = args.deadzone
+        controller = controller_mapping(controller_arg)
+        deadzone_command = create_deadzone_command(controller, int(level))
+        send_command(deadzone_command)
+
+    if args.curve:
+        controller_arg, tx, ty, bx, by = args.curve
+        controller = controller_mapping(controller_arg)
+        curve_command = create_sensitivity_command(controller, int(tx), int(ty), int(bx), int(by))
+        send_command(curve_command)
+if __name__ == '__main__':
+    main()
+
